@@ -20,10 +20,10 @@ namespace BaGet.Protocol.Samples.Tests
                 Console.WriteLine("Package 'newtonsoft.json' does not exist!");
             }
 
-            var packageVersion = NuGetVersion.Parse("12.0.1");
+            var packageVersion = NuGetVersion.Parse("13.0.4");
             if (!await client.ExistsAsync("newtonsoft.json", packageVersion))
             {
-                Console.WriteLine("Package 'newtonsoft.json' version '12.0.1' does not exist!");
+                Console.WriteLine("Package 'newtonsoft.json' version '13.0.4' does not exist!");
             }
         }
 
