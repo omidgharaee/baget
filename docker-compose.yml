@@ -1,0 +1,26 @@
+services:
+  baget:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: baget
+    ports:
+      - "3388:80"
+    volumes:
+      - /opt/baget:/var/baget
+    # extra_hosts:
+    #   - "host.docker.internal:host-gateway"
+    environment:
+      - ApiKey=supersecret
+      - Storage__Type=FileSystem
+      - Storage__Path=/var/baget/packages
+      - Search__Type=Database
+      - Database__Type=Sqlite
+      - Database__ConnectionString=Data Source=/var/baget/baget.db
+      - Mirror__Enabled=true
+      - Mirror__PackageSource=http://mirror-nuget.runflare.com/v3/index.json
+  
+      # Proxy inside container
+      # - HTTP_PROXY=http://host.docker.internal:8080
+      # - HTTPS_PROXY=http://host.docker.internal:8080
+      # - NO_PROXY=localhost,127.0.0.1,host.docker.internal
