@@ -18,7 +18,7 @@ services:
       - Database__Type=Sqlite
       - Database__ConnectionString=Data Source=/var/baget/baget.db
       - Mirror__Enabled=true
-      - Mirror__PackageSource=http://mirror-nuget.runflare.com/v3/index.json
+      - Mirror__PackageSource=https://mirror-nuget.runflare.com/v3/index.json
   
       # Proxy inside container
       # - HTTP_PROXY=http://host.docker.internal:8080
