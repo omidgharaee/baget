@@ -53,8 +53,16 @@ namespace BaGet.Core
 
                     if (package.HasReadme)
                     {
-                        readmeStream = await packageReader.GetReadmeAsync(cancellationToken);
-                        readmeStream = await readmeStream.AsTemporaryFileStreamAsync(cancellationToken);
+                        try
+                        {
+                            readmeStream = await packageReader.GetReadmeAsync(cancellationToken);
+                            readmeStream = await readmeStream.AsTemporaryFileStreamAsync(cancellationToken);
+                        }
+                        catch (FileNotFoundException)
+                        {
+                            _logger.LogWarning("Readme file declared but not found in package. Continuing without it.");
+                            readmeStream = null;
+                        }
                     }
                     else
                     {
