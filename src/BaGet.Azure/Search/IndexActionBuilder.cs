@@ -3,30 +3,30 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using BaGet.Core;
-using Microsoft.Azure.Search.Models;
+using Azure.Search.Documents.Models;
 
 namespace BaGet.Azure
 {
     public class IndexActionBuilder
     {
-        public virtual IReadOnlyList<IndexAction<KeyedDocument>> AddPackage(
+        public virtual IReadOnlyList<IndexDocumentsAction<PackageDocument>> AddPackage(
             PackageRegistration registration)
         {
             return AddOrUpdatePackage(registration, isUpdate: false);
         }
 
-        public virtual IReadOnlyList<IndexAction<KeyedDocument>> UpdatePackage(
+        public virtual IReadOnlyList<IndexDocumentsAction<PackageDocument>> UpdatePackage(
             PackageRegistration registration)
         {
             return AddOrUpdatePackage(registration, isUpdate: true);
         }
 
-        private IReadOnlyList<IndexAction<KeyedDocument>> AddOrUpdatePackage(
+        private IReadOnlyList<IndexDocumentsAction<PackageDocument>> AddOrUpdatePackage(
             PackageRegistration registration,
             bool isUpdate)
         {
             var encodedId = EncodePackageId(registration.PackageId.ToLowerInvariant());
-            var result = new List<IndexAction<KeyedDocument>>();
+            var result = new List<IndexDocumentsAction<PackageDocument>>();
 
             for (var i = 0; i < 4; i++)
             {
@@ -52,8 +52,8 @@ namespace BaGet.Azure
                 {
                     if (isUpdate)
                     {
-                        var action = IndexAction.Delete(
-                            new KeyedDocument
+                        var action = IndexDocumentsAction.Delete(
+                            new PackageDocument
                             {
                                 Key = documentKey
                             });
@@ -72,34 +72,35 @@ namespace BaGet.Azure
                     .Distinct()
                     .ToArray();
 
-                var document = new PackageDocument();
-
-                document.Key = $"{encodedId}-{searchFilters}";
-                document.Id = latest.Id;
-                document.Version = latest.Version.ToFullString();
-                document.Description = latest.Description;
-                document.Authors = latest.Authors;
-                document.HasEmbeddedIcon = latest.HasEmbeddedIcon;
-                document.IconUrl = latest.IconUrlString;
-                document.LicenseUrl = latest.LicenseUrlString;
-                document.ProjectUrl = latest.ProjectUrlString;
-                document.Published = latest.Published;
-                document.Summary = latest.Summary;
-                document.Tags = latest.Tags;
-                document.Title = latest.Title;
-                document.TotalDownloads = versions.Sum(p => p.Downloads);
-                document.DownloadsMagnitude = document.TotalDownloads.ToString().Length;
-                document.Versions = versions.Select(p => p.Version.ToFullString()).ToArray();
-                document.VersionDownloads = versions.Select(p => p.Downloads.ToString()).ToArray();
-                document.Dependencies = dependencies;
-                document.PackageTypes = latest.PackageTypes.Select(t => t.Name).ToArray();
-                document.Frameworks = latest.TargetFrameworks.Select(f => f.Moniker.ToLowerInvariant()).ToArray();
-                document.SearchFilters = searchFilters.ToString();
+                var document = new PackageDocument
+                {
+                    Key = documentKey,
+                    Id = latest.Id,
+                    Version = latest.Version.ToFullString(),
+                    Description = latest.Description,
+                    Authors = latest.Authors,
+                    HasEmbeddedIcon = latest.HasEmbeddedIcon,
+                    IconUrl = latest.IconUrlString,
+                    LicenseUrl = latest.LicenseUrlString,
+                    ProjectUrl = latest.ProjectUrlString,
+                    Published = latest.Published,
+                    Summary = latest.Summary,
+                    Tags = latest.Tags,
+                    Title = latest.Title,
+                    TotalDownloads = versions.Sum(p => p.Downloads),
+                    DownloadsMagnitude = versions.Sum(p => p.Downloads).ToString().Length,
+                    Versions = versions.Select(p => p.Version.ToFullString()).ToArray(),
+                    VersionDownloads = versions.Select(p => p.Downloads.ToString()).ToArray(),
+                    Dependencies = dependencies,
+                    PackageTypes = latest.PackageTypes.Select(t => t.Name).ToArray(),
+                    Frameworks = latest.TargetFrameworks.Select(f => f.Moniker.ToLowerInvariant()).ToArray(),
+                    SearchFilters = searchFilters.ToString()
+                };
 
                 result.Add(
                     isUpdate
-                        ? IndexAction.MergeOrUpload<KeyedDocument>(document)
-                        : IndexAction.Upload<KeyedDocument>(document));
+                        ? IndexDocumentsAction.MergeOrUpload<PackageDocument>(document)
+                        : IndexDocumentsAction.Upload<PackageDocument>(document));
             }
 
             return result;
@@ -107,8 +108,6 @@ namespace BaGet.Azure
 
         private string EncodePackageId(string key)
         {
-            // Keys can only contain letters, digits, underscore(_), dash(-), or equal sign(=).
-            // TODO: Align with NuGet.org's algorithm.
             var bytes = Encoding.UTF8.GetBytes(key);
             var base64 = Convert.ToBase64String(bytes);
 

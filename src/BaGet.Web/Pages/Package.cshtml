@@ -208,7 +208,7 @@ else
                 <ul class="list-unstyled ms-Icon-ul">
                     <li>
                         <i class="ms-Icon ms-Icon--History" aria-hidden="true"></i>
-                        Last updated @Model.LastUpdated.Humanize()
+                        Last updated @Model.LastUpdated.Humanize(false)
                     </li>
 
                     @if (Model.Package.ProjectUrlString != null)

@@ -1,8 +1,10 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading.Tasks;
+using Azure;
+using Azure.Data.Tables;
 using BaGet.Core;
-using Microsoft.Azure.Cosmos.Table;
 using Newtonsoft.Json;
 using NuGet.Versioning;
 
@@ -10,14 +12,14 @@ namespace BaGet.Azure
 {
     public class TableOperationBuilder
     {
-        public TableOperation AddPackage(Package package)
+        public PackageEntity CreatePackageEntity(Package package)
         {
             if (package == null) throw new ArgumentNullException(nameof(package));
 
             var version = package.Version;
             var normalizedVersion = version.ToNormalizedString();
 
-            var entity = new PackageEntity
+            return new PackageEntity
             {
                 PartitionKey = package.Id.ToLowerInvariant(),
                 RowKey = normalizedVersion.ToLowerInvariant(),
@@ -50,61 +52,61 @@ namespace BaGet.Azure
                 PackageTypes = SerializeList(package.PackageTypes, AsPackageTypeModel),
                 TargetFrameworks = SerializeList(package.TargetFrameworks, f => f.Moniker)
             };
-
-            return TableOperation.Insert(entity);
         }
 
-        public TableOperation UpdateDownloads(string packageId, NuGetVersion packageVersion, long downloads)
+        public async Task AddPackageAsync(TableClient table, Package package)
         {
-            var entity = new PackageDownloadsEntity();
-
-            entity.PartitionKey = packageId.ToLowerInvariant();
-            entity.RowKey = packageVersion.ToNormalizedString().ToLowerInvariant();
-            entity.Downloads = downloads;
-            entity.ETag = "*";
-
-            return TableOperation.Merge(entity);
+            var entity = CreatePackageEntity(package);
+            await table.AddEntityAsync(entity);
         }
 
-        public TableOperation HardDeletePackage(string packageId, NuGetVersion packageVersion)
+        public async Task UpdateDownloadsAsync(TableClient table, string packageId, NuGetVersion packageVersion, long downloads)
         {
-            var entity = new PackageEntity();
+            var entity = new PackageDownloadsEntity
+            {
+                PartitionKey = packageId.ToLowerInvariant(),
+                RowKey = packageVersion.ToNormalizedString().ToLowerInvariant(),
+                Downloads = downloads,
+                ETag = ETag.All
+            };
 
-            entity.PartitionKey = packageId.ToLowerInvariant();
-            entity.RowKey = packageVersion.ToNormalizedString().ToLowerInvariant();
-            entity.ETag = "*";
-
-            return TableOperation.Delete(entity);
+            await table.UpdateEntityAsync(entity, entity.ETag, TableUpdateMode.Merge);
         }
 
-        public TableOperation UnlistPackage(string packageId, NuGetVersion packageVersion)
+        public async Task DeletePackageAsync(TableClient table, string packageId, NuGetVersion packageVersion)
         {
-            var entity = new PackageListingEntity();
-
-            entity.PartitionKey = packageId.ToLowerInvariant();
-            entity.RowKey = packageVersion.ToNormalizedString().ToLowerInvariant();
-            entity.Listed = false;
-            entity.ETag = "*";
-
-            return TableOperation.Merge(entity);
+            await table.DeleteEntityAsync(packageId.ToLowerInvariant(), packageVersion.ToNormalizedString().ToLowerInvariant(), ETag.All);
         }
 
-        public TableOperation RelistPackage(string packageId, NuGetVersion packageVersion)
+        public async Task UnlistPackageAsync(TableClient table, string packageId, NuGetVersion packageVersion)
         {
-            var entity = new PackageListingEntity();
+            var entity = new PackageListingEntity
+            {
+                PartitionKey = packageId.ToLowerInvariant(),
+                RowKey = packageVersion.ToNormalizedString().ToLowerInvariant(),
+                Listed = false,
+                ETag = ETag.All
+            };
 
-            entity.PartitionKey = packageId.ToLowerInvariant();
-            entity.RowKey = packageVersion.ToNormalizedString().ToLowerInvariant();
-            entity.Listed = true;
-            entity.ETag = "*";
+            await table.UpdateEntityAsync(entity, entity.ETag, TableUpdateMode.Merge);
+        }
 
-            return TableOperation.Merge(entity);
+        public async Task RelistPackageAsync(TableClient table, string packageId, NuGetVersion packageVersion)
+        {
+            var entity = new PackageListingEntity
+            {
+                PartitionKey = packageId.ToLowerInvariant(),
+                RowKey = packageVersion.ToNormalizedString().ToLowerInvariant(),
+                Listed = true,
+                ETag = ETag.All
+            };
+
+            await table.UpdateEntityAsync(entity, entity.ETag, TableUpdateMode.Merge);
         }
 
         private static string SerializeList<TIn, TOut>(IReadOnlyList<TIn> objects, Func<TIn, TOut> map)
         {
             var data = objects.Select(map).ToList();
-
             return JsonConvert.SerializeObject(data);
         }
 
@@ -126,5 +128,58 @@ namespace BaGet.Azure
                 Version = packageType.Version
             };
         }
+
+        public TableEntity HardDeletePackageEntity(string packageId, NuGetVersion version)
+        {
+            return new TableEntity(packageId.ToLowerInvariant(), version.ToNormalizedString().ToLowerInvariant())
+            {
+                ETag = ETag.All
+            };
+        }
+
+        public TableEntity UnlistPackageEntity(string packageId, NuGetVersion version)
+        {
+            var entity = new TableEntity(packageId.ToLowerInvariant(), version.ToNormalizedString().ToLowerInvariant())
+            {
+                ["Listed"] = false,
+                ETag = ETag.All
+            };
+            return entity;
+        }
+
+        public PackageDownloadsEntity CreateDownloadsEntity(string packageId, NuGetVersion version, long downloads)
+        {
+            return new PackageDownloadsEntity
+            {
+                PartitionKey = packageId.ToLowerInvariant(),
+                RowKey = version.ToNormalizedString().ToLowerInvariant(),
+                Downloads = downloads,
+                ETag = ETag.All
+            };
+        }
+
+        public TableEntity RelistPackageEntity(string packageId, NuGetVersion version)
+        {
+            var entity = new TableEntity(packageId.ToLowerInvariant(), version.ToNormalizedString().ToLowerInvariant())
+            {
+                ["Listed"] = true,
+                ETag = ETag.All
+            };
+            return entity;
+        }
+    }
+
+
+    public class DependencyModel
+    {
+        public string Id { get; set; }
+        public string VersionRange { get; set; }
+        public string TargetFramework { get; set; }
+    }
+
+    public class PackageTypeModel
+    {
+        public string Name { get; set; }
+        public string Version { get; set; }
     }
 }

@@ -1,75 +1,78 @@
 using System;
 using System.ComponentModel.DataAnnotations;
-using Microsoft.Azure.Search;
-using Microsoft.Azure.Search.Models;
+using Azure.Search.Documents;
+using Azure.Search.Documents.Indexes;
+using Azure.Search.Documents.Indexes.Models;
 
 namespace BaGet.Azure
 {
-    // See: https://docs.microsoft.com/en-us/nuget/api/search-query-service-resource#search-for-packages
-    [SerializePropertyNamesAsCamelCase]
     public class PackageDocument : KeyedDocument
     {
         public const string IndexName = "packages";
 
-        [IsSearchable, IsFilterable, IsSortable]
+        [SearchableField(IsFilterable = true, IsSortable = true)]
         public string Id { get; set; }
 
         /// <summary>
-        /// The package's full versions after normalization, including any SemVer 2.0.0 build metadata.
+        /// The package's full version after normalization (SemVer 2.0.0 supported)
         /// </summary>
-        [IsSearchable, IsFilterable, IsSortable]
+        [SearchableField(IsFilterable = true, IsSortable = true)]
         public string Version { get; set; }
 
-        [IsSearchable]
+        [SearchableField]
         public string Description { get; set; }
+
         public string[] Authors { get; set; }
+
         public bool HasEmbeddedIcon { get; set; }
+
         public string IconUrl { get; set; }
+
         public string LicenseUrl { get; set; }
+
         public string ProjectUrl { get; set; }
+
         public DateTimeOffset Published { get; set; }
 
-        [IsSearchable]
+        [SearchableField]
         public string Summary { get; set; }
 
-        [IsSearchable, IsFilterable, IsFacetable]
+        [SearchableField(IsFilterable = true, IsFacetable = true)]
         public string[] Tags { get; set; }
 
-        [IsSearchable]
+        [SearchableField]
         public string Title { get; set; }
 
-        [IsFilterable, IsSortable]
+        [SimpleField(IsFilterable = true, IsSortable = true)]
         public long TotalDownloads { get; set; }
 
-        [IsFilterable, IsSortable]
+        [SimpleField(IsFilterable = true, IsSortable = true)]
         public int DownloadsMagnitude { get; set; }
 
         /// <summary>
-        /// The package's full versions after normalization, including any SemVer 2.0.0 build metadata.
+        /// All normalized versions
         /// </summary>
-        public string[] Versions { get; set;  }
+        public string[] Versions { get; set; }
+
         public string[] VersionDownloads { get; set; }
 
-        [IsSearchable]
-        [Analyzer(ExactMatchCustomAnalyzer.Name)]
+        [SearchableField(AnalyzerName = ExactMatchCustomAnalyzer.Name)]
         public string[] Dependencies { get; set; }
 
-        [IsSearchable]
-        [Analyzer(ExactMatchCustomAnalyzer.Name)]
+        [SearchableField(AnalyzerName = ExactMatchCustomAnalyzer.Name)]
         public string[] PackageTypes { get; set; }
 
-        [IsSearchable]
-        [Analyzer(ExactMatchCustomAnalyzer.Name)]
+        [SearchableField(AnalyzerName = ExactMatchCustomAnalyzer.Name)]
         public string[] Frameworks { get; set; }
 
-        [IsFilterable]
+        [SimpleField(IsFilterable = true)]
         public string SearchFilters { get; set; }
     }
 
-    [SerializePropertyNamesAsCamelCase]
     public class KeyedDocument : IKeyedDocument
     {
         [Key]
+        [SimpleField(IsKey = true)]
         public string Key { get; set; }
     }
 

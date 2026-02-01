@@ -5,22 +5,21 @@ using System.Threading;
 using System.Threading.Tasks;
 using BaGet.Core;
 using BaGet.Protocol.Models;
-using Microsoft.Azure.Cosmos.Table;
+using Azure;
+using Azure.Data.Tables;
 
 namespace BaGet.Azure
 {
     public class TableSearchService : ISearchService
     {
-        private const string TableName = "Packages";
-
-        private readonly CloudTable _table;
+        private readonly TableClient _table;
         private readonly ISearchResponseBuilder _responseBuilder;
 
         public TableSearchService(
-            CloudTableClient client,
+            TableClient tableClient,
             ISearchResponseBuilder responseBuilder)
         {
-            _table = client?.GetTableReference(TableName) ?? throw new ArgumentNullException(nameof(client));
+            _table = tableClient ?? throw new ArgumentNullException(nameof(tableClient));
             _responseBuilder = responseBuilder ?? throw new ArgumentNullException(nameof(responseBuilder));
         }
 
@@ -61,16 +60,15 @@ namespace BaGet.Azure
             CancellationToken cancellationToken)
         {
             // TODO: Support versions autocomplete.
-            // See: https://github.com/loic-sharma/BaGet/issues/291
             var response = _responseBuilder.BuildAutocomplete(new List<string>());
-
             return Task.FromResult(response);
         }
 
-        public Task<DependentsResponse> FindDependentsAsync(string packageId, CancellationToken cancellationToken)
+        public Task<DependentsResponse> FindDependentsAsync(
+            string packageId,
+            CancellationToken cancellationToken)
         {
             var response = _responseBuilder.BuildDependents(new List<PackageDependent>());
-
             return Task.FromResult(response);
         }
 
@@ -82,128 +80,55 @@ namespace BaGet.Azure
             bool includeSemVer2,
             CancellationToken cancellationToken)
         {
-            var query = new TableQuery<PackageEntity>();
-            query = query.Where(GenerateSearchFilter(searchText, includePrerelease, includeSemVer2));
-            query.TakeCount = 500;
+            var filter = GenerateSearchFilter(searchText, includePrerelease, includeSemVer2);
 
-            var results = await LoadPackagesAsync(query, maxPartitions: skip + take, cancellationToken);
+            var query = _table.QueryAsync<PackageEntity>(
+                filter: filter,
+                maxPerPage: skip + take,
+                cancellationToken: cancellationToken);
+
+            var results = new List<PackageEntity>();
+            await foreach (var entity in query)
+            {
+                results.Add(entity);
+            }
 
             return results
                 .GroupBy(p => p.Id, StringComparer.OrdinalIgnoreCase)
-                .Select(group => new PackageRegistration(group.Key, group.ToList()))
+                .Select(g => new PackageRegistration(
+                    g.Key,
+                    g.Select(e => e.AsPackage()).ToList()
+                ))
                 .Skip(skip)
                 .Take(take)
                 .ToList();
         }
 
-        private async Task<IReadOnlyList<Package>> LoadPackagesAsync(
-            TableQuery<PackageEntity> query,
-            int maxPartitions,
-            CancellationToken cancellationToken)
-        {
-            var results = new List<Package>();
-
-            var partitions = 0;
-            string lastPartitionKey = null;
-            TableContinuationToken token = null;
-            do
-            {
-                var segment = await _table.ExecuteQuerySegmentedAsync(query, token, cancellationToken);
-
-                token = segment.ContinuationToken;
-
-                foreach (var result in segment.Results)
-                {
-                    if (lastPartitionKey != result.PartitionKey)
-                    {
-                        lastPartitionKey = result.PartitionKey;
-                        partitions++;
-
-                        if (partitions > maxPartitions)
-                        {
-                            break;
-                        }
-                    }
-
-                    results.Add(result.AsPackage());
-                }
-            }
-            while (token != null);
-
-            return results;
-        }
-
         private string GenerateSearchFilter(string searchText, bool includePrerelease, bool includeSemVer2)
         {
-            var result = "";
+            var filters = new List<string>();
 
             if (!string.IsNullOrWhiteSpace(searchText))
             {
-                // Filter to rows where the "searchText" prefix matches on the partition key.
-                var prefix = searchText.TrimEnd().Split(separator: null).Last();
+                var prefix = searchText.TrimEnd().Split(' ').Last();
+                var upperBound = prefix + "~"; // simple lexicographical upper bound
 
-                var prefixLower = prefix;
-                var prefixUpper = prefix + "~";
-
-                var partitionLowerFilter = TableQuery.GenerateFilterCondition(
-                    "PartitionKey",
-                    QueryComparisons.GreaterThanOrEqual,
-                    prefixLower);
-
-                var partitionUpperFilter = TableQuery.GenerateFilterCondition(
-                    "PartitionKey",
-                    QueryComparisons.LessThanOrEqual,
-                    prefixUpper);
-
-                result = GenerateAnd(partitionLowerFilter, partitionUpperFilter);
+                filters.Add($"PartitionKey ge '{prefix}' and PartitionKey le '{upperBound}'");
             }
 
-            // Filter to rows that are listed.
-            result = GenerateAnd(
-                result,
-                GenerateIsTrue(nameof(PackageEntity.Listed)));
+            filters.Add("Listed eq true");
 
             if (!includePrerelease)
             {
-                result = GenerateAnd(
-                    result,
-                    GenerateIsFalse(nameof(PackageEntity.IsPrerelease)));
+                filters.Add("IsPrerelease eq false");
             }
 
             if (!includeSemVer2)
             {
-                result = GenerateAnd(
-                    result,
-                    TableQuery.GenerateFilterConditionForInt(
-                        nameof(PackageEntity.SemVerLevel),
-                        QueryComparisons.Equal,
-                        0));
+                filters.Add("SemVerLevel eq 0");
             }
 
-            return result;
-
-            string GenerateAnd(string left, string right)
-            {
-                if (string.IsNullOrEmpty(left)) return right;
-
-                return TableQuery.CombineFilters(left, TableOperators.And, right);
-            }
-
-            string GenerateIsTrue(string propertyName)
-            {
-                return TableQuery.GenerateFilterConditionForBool(
-                    propertyName,
-                    QueryComparisons.Equal,
-                    givenValue: true);
-            }
-
-            string GenerateIsFalse(string propertyName)
-            {
-                return TableQuery.GenerateFilterConditionForBool(
-                    propertyName,
-                    QueryComparisons.Equal,
-                    givenValue: false);
-            }
+            return string.Join(" and ", filters);
         }
     }
 }

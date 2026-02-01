@@ -6,22 +6,21 @@ using System.Threading;
 using System.Threading.Tasks;
 using BaGet.Core;
 using BaGet.Protocol.Models;
-using Microsoft.Azure.Search;
+using Azure.Search.Documents;
+using Azure.Search.Documents.Models;
 using NuGet.Versioning;
+using SearchOptions = Azure.Search.Documents.SearchOptions;
 
 namespace BaGet.Azure
 {
-    using QueryType = Microsoft.Azure.Search.Models.QueryType;
-    using SearchParameters = Microsoft.Azure.Search.Models.SearchParameters;
-
     public class AzureSearchService : ISearchService
     {
-        private readonly SearchIndexClient _searchClient;
+        private readonly SearchClient _searchClient;
         private readonly IUrlGenerator _url;
         private readonly IFrameworkCompatibilityService _frameworks;
 
         public AzureSearchService(
-            SearchIndexClient searchClient,
+            SearchClient searchClient,
             IUrlGenerator url,
             IFrameworkCompatibilityService frameworks)
         {
@@ -36,23 +35,24 @@ namespace BaGet.Azure
         {
             var searchText = BuildSeachQuery(request.Query, request.PackageType, request.Framework);
             var filter = BuildSearchFilter(request.IncludePrerelease, request.IncludeSemVer2);
-            var parameters = new SearchParameters
+
+            var options = new SearchOptions
             {
-                IncludeTotalResultCount = true,
-                QueryType = QueryType.Full,
+                IncludeTotalCount = true,
+                QueryType = SearchQueryType.Full,
                 Skip = request.Skip,
-                Top = request.Take,
+                Size = request.Take,
                 Filter = filter
             };
 
-            var response = await _searchClient.Documents.SearchAsync<PackageDocument>(
+            var response = await _searchClient.SearchAsync<PackageDocument>(
                 searchText,
-                parameters,
-                cancellationToken: cancellationToken);
+                options,
+                cancellationToken);
 
             var results = new List<SearchResult>();
 
-            foreach (var result in response.Results)
+            foreach (var result in response.Value.GetResults())
             {
                 var document = result.Document;
                 var versions = new List<SearchResultVersion>();
@@ -80,7 +80,7 @@ namespace BaGet.Azure
 
                 results.Add(new SearchResult
                 {
-                    PackageId =  document.Id,
+                    PackageId = document.Id,
                     Version = document.Version,
                     Description = document.Description,
                     Authors = document.Authors,
@@ -98,7 +98,7 @@ namespace BaGet.Azure
 
             return new SearchResponse
             {
-                TotalHits = response.Count.Value,
+                TotalHits = response.Value.TotalCount ?? 0,
                 Data = results,
                 Context = SearchContext.Default(_url.GetPackageMetadataResourceUrl())
             };
@@ -108,29 +108,27 @@ namespace BaGet.Azure
             AutocompleteRequest request,
             CancellationToken cancellationToken)
         {
-            // TODO: Do a prefix search on the package id field.
-            // TODO: Support prerelease, semver2, and package type filters.
-            // See: https://github.com/loic-sharma/BaGet/issues/291
-            var parameters = new SearchParameters
+            var options = new SearchOptions
             {
-                IncludeTotalResultCount = true,
+                IncludeTotalCount = true,
                 Skip = request.Skip,
-                Top = request.Take,
+                Size = request.Take,
             };
 
-            var response = await _searchClient.Documents.SearchAsync<PackageDocument>(
+            var response = await _searchClient.SearchAsync<PackageDocument>(
                 request.Query,
-                parameters,
-                cancellationToken: cancellationToken);
+                options,
+                cancellationToken);
 
-            var results = response.Results
+            var results = response.Value
+                .GetResults()
                 .Select(r => r.Document.Id)
                 .ToList()
                 .AsReadOnly();
 
             return new AutocompleteResponse
             {
-                TotalHits = response.Count.Value,
+                TotalHits = response.Value.TotalCount ?? 0,
                 Data = results,
                 Context = AutocompleteContext.Default
             };
@@ -140,8 +138,6 @@ namespace BaGet.Azure
             VersionsRequest request,
             CancellationToken cancellationToken)
         {
-            // TODO: Support versions autocomplete.
-            // See: https://github.com/loic-sharma/BaGet/issues/291
             throw new NotImplementedException();
         }
 
@@ -149,18 +145,23 @@ namespace BaGet.Azure
             string packageId,
             CancellationToken cancellationToken)
         {
-            // TODO: Escape packageId.
             var query = $"dependencies:{packageId.ToLowerInvariant()}";
-            var parameters = new SearchParameters
+
+            var options = new SearchOptions
             {
-                IncludeTotalResultCount = true,
-                QueryType = QueryType.Full,
+                IncludeTotalCount = true,
+                QueryType = SearchQueryType.Full,
                 Skip = 0,
-                Top = 20,
+                Size = 20,
             };
 
-            var response = await _searchClient.Documents.SearchAsync<PackageDocument>(query, parameters, cancellationToken: cancellationToken);
-            var results = response.Results
+            var response = await _searchClient.SearchAsync<PackageDocument>(
+                query,
+                options,
+                cancellationToken);
+
+            var results = response.Value
+                .GetResults()
                 .Select(r => new PackageDependent
                 {
                     Id = r.Document.Id,
@@ -172,10 +173,12 @@ namespace BaGet.Azure
 
             return new DependentsResponse
             {
-                TotalHits = response.Count.Value,
+                TotalHits = response.Value.TotalCount ?? 0,
                 Data = results
             };
         }
+
+        // ----- helpers -----
 
         private string BuildSeachQuery(string query, string packageType, string framework)
         {
@@ -210,14 +213,10 @@ namespace BaGet.Azure
             var searchFilters = SearchFilters.Default;
 
             if (includePrerelease)
-            {
                 searchFilters |= SearchFilters.IncludePrerelease;
-            }
 
             if (includeSemVer2)
-            {
                 searchFilters |= SearchFilters.IncludeSemVer2;
-            }
 
             return $"searchFilters eq '{searchFilters}'";
         }

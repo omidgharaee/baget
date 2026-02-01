@@ -1,5 +1,5 @@
 using System.Collections.Generic;
-using Microsoft.Azure.Search.Models;
+using Azure.Search.Documents.Indexes.Models;
 
 namespace BaGet.Azure
 {
@@ -10,12 +10,9 @@ namespace BaGet.Azure
     {
         public const string Name = "baget-exact-match-analyzer";
 
-        public static CustomAnalyzer Instance = new CustomAnalyzer(
-            Name,
-            TokenizerName.Keyword,
-            new List<TokenFilterName>
-            {
-                TokenFilterName.Lowercase
-            });
+        public static readonly CustomAnalyzer Instance = new CustomAnalyzer(Name, LexicalTokenizerName.Keyword)
+        {
+            TokenFilters = { TokenFilterName.Lowercase }
+        };
     }
 }

@@ -1,19 +1,17 @@
 using System;
+using Azure;
+using Azure.Data.Tables;
 using BaGet.Core;
-using Microsoft.Azure.Cosmos.Table;
 
 namespace BaGet.Azure
 {
-    /// <summary>
-    /// The Azure Table Storage entity that maps to a <see cref="Package"/>.
-    /// The <see cref="TableEntity.PartitionKey"/> is the <see cref="Package.Id"/> and
-    /// the <see cref="TableEntity.RowKey"/> is the <see cref="Package.Version"/>.
-    /// </summary>
-    public class PackageEntity : TableEntity, IDownloadCount, IListed
+    public class PackageEntity : ITableEntity, IDownloadCount, IListed
     {
-        public PackageEntity()
-        {
-        }
+        // ITableEntity requires PartitionKey, RowKey, Timestamp, ETag
+        public string PartitionKey { get; set; }
+        public string RowKey { get; set; }
+        public DateTimeOffset? Timestamp { get; set; }
+        public ETag ETag { get; set; }
 
         public string Id { get; set; }
         public string NormalizedVersion { get; set; }
@@ -33,63 +31,33 @@ namespace BaGet.Azure
         public string ReleaseNotes { get; set; }
         public string Summary { get; set; }
         public string Title { get; set; }
-
         public string IconUrl { get; set; }
         public string LicenseUrl { get; set; }
         public string ProjectUrl { get; set; }
-
         public string RepositoryUrl { get; set; }
         public string RepositoryType { get; set; }
-
         public string Tags { get; set; }
         public string Dependencies { get; set; }
         public string PackageTypes { get; set; }
         public string TargetFrameworks { get; set; }
     }
 
-    /// <summary>
-    /// A single item in <see cref="PackageEntity.Dependencies"/>.
-    /// </summary>
-    public class DependencyModel
+    public class PackageListingEntity : ITableEntity, IListed
     {
-        public string Id { get; set; }
-        public string VersionRange { get; set; }
-        public string TargetFramework { get; set; }
-    }
-
-    /// <summary>
-    /// A single item in <see cref="PackageEntity.PackageTypes"/>.
-    /// </summary>
-    public class PackageTypeModel
-    {
-        public string Name { get; set; }
-        public string Version { get; set; }
-    }
-
-    /// <summary>
-    /// The Azure Table Storage entity to update the <see cref="Package.Listed"/> column.
-    /// The <see cref="TableEntity.PartitionKey"/> is the <see cref="Package.Id"/> and
-    /// the <see cref="TableEntity.RowKey"/> is the <see cref="Package.Version"/>.
-    /// </summary>
-    public class PackageListingEntity : TableEntity, IListed
-    {
-        public PackageListingEntity()
-        {
-        }
+        public string PartitionKey { get; set; }
+        public string RowKey { get; set; }
+        public DateTimeOffset? Timestamp { get; set; }
+        public ETag ETag { get; set; }
 
         public bool Listed { get; set; }
     }
 
-    /// <summary>
-    /// The Azure Table Storage entity to update the <see cref="Package.Downloads"/> column.
-    /// The <see cref="TableEntity.PartitionKey"/> is the <see cref="Package.Id"/> and
-    /// the <see cref="TableEntity.RowKey"/> is the <see cref="Package.Version"/>.
-    /// </summary>
-    public class PackageDownloadsEntity : TableEntity, IDownloadCount
+    public class PackageDownloadsEntity : ITableEntity, IDownloadCount
     {
-        public PackageDownloadsEntity()
-        {
-        }
+        public string PartitionKey { get; set; }
+        public string RowKey { get; set; }
+        public DateTimeOffset? Timestamp { get; set; }
+        public ETag ETag { get; set; }
 
         public long Downloads { get; set; }
     }
