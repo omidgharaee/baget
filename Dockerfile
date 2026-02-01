@@ -1,10 +1,10 @@
-# Use .NET 6 ASP.NET runtime image as base
-FROM mcr.microsoft.com/dotnet/aspnet:6.0 AS base
+# Use .NET 8 ASP.NET runtime image as base
+FROM mcr.microsoft.com/dotnet/aspnet:8.0 AS base
 WORKDIR /app
 EXPOSE 80
 
-# Use .NET 6 SDK image for build
-FROM mcr.microsoft.com/dotnet/sdk:6.0 AS build
+# Use .NET 8 SDK image for build
+FROM mcr.microsoft.com/dotnet/sdk:8.0 AS build
 WORKDIR /src
 COPY /src .
 # Restore and build the project
