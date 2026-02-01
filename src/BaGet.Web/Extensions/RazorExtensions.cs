@@ -9,7 +9,7 @@ namespace BaGet.Web
 
             string[] suffixes = { "K", "M", "B", "T" };
             double tempValue = value;
-            int suffixIndex = -1;
+            var suffixIndex = -1;
 
             while (tempValue >= 1000 && suffixIndex < suffixes.Length - 1)
             {

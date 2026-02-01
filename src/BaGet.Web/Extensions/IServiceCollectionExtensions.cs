@@ -13,14 +13,14 @@ namespace BaGet
             Action<BaGetApplication> configureAction)
         {
             services
-                .AddRouting(options => options.LowercaseUrls = true)
-                .AddControllers()
-                .AddApplicationPart(typeof(PackageContentController).Assembly)
-                .SetCompatibilityVersion(CompatibilityVersion.Version_3_0)
-                .AddJsonOptions(options =>
-                {
-                    options.JsonSerializerOptions.IgnoreNullValues = true;
-                });
+                 .AddRouting(options => options.LowercaseUrls = true)
+                 .AddControllers()
+                 .AddApplicationPart(typeof(PackageContentController).Assembly)
+                 .AddJsonOptions(options =>
+                 {
+                     options.JsonSerializerOptions.DefaultIgnoreCondition =
+                         System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull;
+                 });
 
             services.AddRazorPages();
 
